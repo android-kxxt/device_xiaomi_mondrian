@@ -1,0 +1,13 @@
+diff --git a/generic/vendor/common/location.te b/generic/vendor/common/location.te
+index 1dff035c..b7aa5b1c 100644
+--- a/generic/vendor/common/location.te
++++ b/generic/vendor/common/location.te
+@@ -65,5 +65,5 @@ userdebug_or_eng(`
+ 
+ dontaudit vendor_location kernel:system module_request;
+ 
+-# xtra-daemon control
+-get_prop(vendor_location, xtra_control_prop)
++## xtra-daemon control
++#get_prop(vendor_location, xtra_control_prop)
+

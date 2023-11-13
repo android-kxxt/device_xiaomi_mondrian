@@ -1,0 +1,121 @@
+project packages/modules/Bluetooth/
+diff --git a/android/app/src/com/android/bluetooth/hfp/HeadsetService.java b/android/app/src/com/android/bluetooth/hfp/HeadsetService.java
+index 856f7dde04..90309cc39b 100644
+--- a/android/app/src/com/android/bluetooth/hfp/HeadsetService.java
++++ b/android/app/src/com/android/bluetooth/hfp/HeadsetService.java
+@@ -946,6 +946,16 @@ public class HeadsetService extends ProfileService {
+                 receiver.propagateException(e);
+             }
+         }
++
++        @Override
++        public void phoneStateChangedDsDa(int numActive, int numHeld, int callState, String number,
++                                          int type, String name, AttributionSource source) {
++        }
++
++        @Override
++        public void clccResponseDsDa(int index, int direction, int status, int mode, boolean mpty,
++                                     String number, int type, AttributionSource source) {
++        }
+     }
+ 
+     // API methods
+diff --git a/framework/java/android/bluetooth/BluetoothHeadset.java b/framework/java/android/bluetooth/BluetoothHeadset.java
+index 403a8a8ec1..0c63950361 100644
+--- a/framework/java/android/bluetooth/BluetoothHeadset.java
++++ b/framework/java/android/bluetooth/BluetoothHeadset.java
+@@ -1427,4 +1427,59 @@ public final class BluetoothHeadset implements BluetoothProfile {
+     private static void log(String msg) {
+         Log.d(TAG, msg);
+     }
++
++     /**
++     * Notify Headset of phone state change.
++     * This is a backdoor for phone app to call BluetoothHeadset since
++     * there is currently not a good way to get precise call state change outside
++     * of phone app.
++     *
++     * @hide
++     */
++    @RequiresBluetoothConnectPermission
++    @RequiresPermission(allOf = {
++            android.Manifest.permission.BLUETOOTH_CONNECT,
++            android.Manifest.permission.MODIFY_PHONE_STATE,
++    })
++    public void phoneStateChangedDsDa(int numActive, int numHeld, int callState, String number,
++            int type, String name) {
++        final IBluetoothHeadset service = getService();
++        if (service != null && isEnabled()) {
++            try {
++                service.phoneStateChangedDsDa(numActive, numHeld, callState, number, type, name,
++                        mAttributionSource);
++            } catch (RemoteException e) {
++                Log.e(TAG, e.toString());
++            }
++        } else {
++            Log.w(TAG, "Proxy not attached to service");
++            if (DBG) Log.d(TAG, Log.getStackTraceString(new Throwable()));
++        }
++    }
++
++    /**
++     * Send Headset of CLCC response
++     *
++     * @hide
++     */
++    @RequiresBluetoothConnectPermission
++    @RequiresPermission(allOf = {
++            android.Manifest.permission.BLUETOOTH_CONNECT,
++            android.Manifest.permission.MODIFY_PHONE_STATE,
++    })
++    public void clccResponseDsDa(int index, int direction, int status, int mode, boolean mpty,
++            String number, int type) {
++        final IBluetoothHeadset service = getService();
++        if (service != null && isEnabled()) {
++            try {
++                service.clccResponseDsDa(index, direction, status, mode, mpty, number, type,
++                        mAttributionSource);
++            } catch (RemoteException e) {
++                Log.e(TAG, e.toString());
++            }
++        } else {
++            Log.w(TAG, "Proxy not attached to service");
++            if (DBG) Log.d(TAG, Log.getStackTraceString(new Throwable()));
++        }
++    }
+ }
+diff --git a/system/audio_hal_interface/hidl/codec_status_hidl.cc b/system/audio_hal_interface/hidl/codec_status_hidl.cc
+index 3a1db42326..11f892d7b9 100644
+--- a/system/audio_hal_interface/hidl/codec_status_hidl.cc
++++ b/system/audio_hal_interface/hidl/codec_status_hidl.cc
+@@ -494,6 +494,16 @@ bool UpdateOffloadingCapabilities(
+       case BTAV_A2DP_CODEC_INDEX_SOURCE_LDAC:
+         codec_type_masks |= CodecType::LDAC;
+         break;
++      case BTAV_A2DP_CODEC_INDEX_SOURCE_LC3:
++        LOG(WARNING) << __func__
++                     << ": Ignore source codec_type=" << preference.codec_type
++                     << ", not supported on HIDL";
++        break;
++      case BTAV_A2DP_CODEC_INDEX_SOURCE_OPUS:
++        LOG(WARNING) << __func__
++                     << ": Ignore source codec_type=" << preference.codec_type
++                     << ", not supported on HIDL";
++        break;
+       case BTAV_A2DP_CODEC_INDEX_SINK_SBC:
+         [[fallthrough]];
+       case BTAV_A2DP_CODEC_INDEX_SINK_AAC:
+diff --git a/system/binder/android/bluetooth/IBluetoothHeadset.aidl b/system/binder/android/bluetooth/IBluetoothHeadset.aidl
+index 3e9474c99a..4b32456184 100644
+--- a/system/binder/android/bluetooth/IBluetoothHeadset.aidl
++++ b/system/binder/android/bluetooth/IBluetoothHeadset.aidl
+@@ -101,4 +101,8 @@ interface IBluetoothHeadset {
+     oneway void isNoiseReductionSupported(in BluetoothDevice device, in AttributionSource attributionSource, in SynchronousResultReceiver receiver);
+     @JavaPassthrough(annotation="@android.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)")
+     oneway void isVoiceRecognitionSupported(in BluetoothDevice device, in AttributionSource attributionSource, in SynchronousResultReceiver receiver);
++    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.MODIFY_PHONE_STATE})")
++    oneway void phoneStateChangedDsDa(int numActive, int numHeld, int callState, String number, int type, String name, in AttributionSource attributionSource);
++    @JavaPassthrough(annotation="@android.annotation.RequiresPermission(allOf={android.Manifest.permission.BLUETOOTH_CONNECT,android.Manifest.permission.MODIFY_PHONE_STATE})")
++    void clccResponseDsDa(int index, int direction, int status, int mode, boolean mpty, String number, int type, in AttributionSource attributionSource);
+ }
+

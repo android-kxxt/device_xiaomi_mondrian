@@ -1,0 +1,16 @@
+project frameworks/native/
+diff --git a/services/vibratorservice/VibratorHalController.cpp b/services/vibratorservice/VibratorHalController.cpp
+index c1795f5c32..b32c85270b 100644
+--- a/services/vibratorservice/VibratorHalController.cpp
++++ b/services/vibratorservice/VibratorHalController.cpp
+@@ -53,7 +53,8 @@ std::shared_ptr<HalWrapper> connectHal(std::shared_ptr<CallbackScheduler> schedu
+         return nullptr;
+     }
+ 
+-    sp<Aidl::IVibrator> aidlHal = waitForVintfService<Aidl::IVibrator>();
++    sp<Aidl::IVibrator> aidlHal = waitForVintfService<Aidl::IVibrator>(String16("vibratorfeature"));
++    //sp<Aidl::IVibrator> aidlHal = waitForVintfService<Aidl::IVibrator>();
+     if (aidlHal) {
+         ALOGV("Successfully connected to Vibrator HAL AIDL service.");
+         return std::make_shared<AidlHalWrapper>(std::move(scheduler), aidlHal);
+

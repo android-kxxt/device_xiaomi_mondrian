@@ -1,0 +1,25 @@
+project packages/apps/Settings/
+diff --git a/src/com/android/settings/gestures/ScreenOffUdfpsPreferenceController.java b/src/com/android/settings/gestures/ScreenOffUdfpsPreferenceController.java
+index 1d6fa8a870..ecd033b689 100644
+--- a/src/com/android/settings/gestures/ScreenOffUdfpsPreferenceController.java
++++ b/src/com/android/settings/gestures/ScreenOffUdfpsPreferenceController.java
+@@ -63,12 +63,13 @@ public class ScreenOffUdfpsPreferenceController extends GesturePreferenceControl
+ 
+     @Override
+     public int getAvailabilityStatus() {
+-        // No hardware support for Screen-Off UDFPS
+-        if (!screenOffUdfpsAvailable(mContext, getAmbientConfig())) {
+-            return UNSUPPORTED_ON_DEVICE;
+-        }
++        return UNSUPPORTED_ON_DEVICE;
++        // // No hardware support for Screen-Off UDFPS
++        // if (!screenOffUdfpsAvailable(mContext, getAmbientConfig())) {
++        //     return UNSUPPORTED_ON_DEVICE;
++        // }
+ 
+-        return AVAILABLE;
++        // return AVAILABLE;
+     }
+ 
+     @Override
+

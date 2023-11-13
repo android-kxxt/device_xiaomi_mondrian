@@ -1,0 +1,247 @@
+diff --git a/core/java/android/provider/Settings.java b/core/java/android/provider/Settings.java
+index c18f75c41787..a6cd5c903aea 100644
+--- a/core/java/android/provider/Settings.java
++++ b/core/java/android/provider/Settings.java
+@@ -4597,6 +4597,15 @@ public final class Settings {
+          */
+         public static final int SCREEN_BRIGHTNESS_MODE_AUTOMATIC = 1;
+ 
++        /**
++         * Screen resolution mode.
++         *  0 = disable
++         *  1 = overlay size
++         * @hide
++         */
++        @Readable
++        public static final String SCREEN_RESOLUTION_MODE = "screen_resolution_mode";
++        
+         /**
+          * Control whether to enable adaptive sleep mode.
+          * @deprecated Use {@link android.provider.Settings.Secure#ADAPTIVE_SLEEP} instead.
+@@ -9125,6 +9134,17 @@ public final class Settings {
+         @Readable
+         public static final String DOZE_ALWAYS_ON = "doze_always_on";
+ 
++        /**
++         * Press udfps mode.
++         *  0 = disable
++         *  1 = wake screen
++         *  2 = wake phone
++         * @hide
++         */
++        @Readable
++        public static final String DOZE_PRESS_UDFPS_MODE =
++                "doze_press_udfps_mode";
++
+         /**
+          * Whether the device should pulse on pick up gesture.
+          * @hide
+diff --git a/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java b/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
+index f6a66c9cfd60..29d58218482b 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
++++ b/packages/SettingsProvider/src/android/provider/settings/backup/SecureSettings.java
+@@ -109,6 +109,7 @@ public class SecureSettings {
+         Settings.Secure.POWER_MENU_LOCKED_SHOW_CONTENT,
+         Settings.Secure.DOZE_ENABLED,
+         Settings.Secure.DOZE_ALWAYS_ON,
++        Settings.Secure.DOZE_PRESS_UDFPS_MODE,
+         Settings.Secure.DOZE_PICK_UP_GESTURE,
+         Settings.Secure.DOZE_DOUBLE_TAP_GESTURE,
+         Settings.Secure.DOZE_TAP_SCREEN_GESTURE,
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+index 00d08b3d2f84..acf2c996c356 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SecureSettingsValidators.java
+@@ -162,6 +162,8 @@ public class SecureSettingsValidators {
+         VALIDATORS.put(Secure.STATUS_BAR_SHOW_VIBRATE_ICON, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.DOZE_ENABLED, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.DOZE_ALWAYS_ON, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(
++                Secure.DOZE_PRESS_UDFPS_MODE, new DiscreteValueValidator(new String[] {"0", "1", "2"}));
+         VALIDATORS.put(Secure.DOZE_PICK_UP_GESTURE, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.DOZE_DOUBLE_TAP_GESTURE, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(Secure.DOZE_TAP_SCREEN_GESTURE, BOOLEAN_VALIDATOR);
+diff --git a/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java b/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
+index b16a1088d5c1..38b7a8650138 100644
+--- a/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
++++ b/packages/SettingsProvider/src/android/provider/settings/validators/SystemSettingsValidators.java
+@@ -113,6 +113,7 @@ public class SystemSettingsValidators {
+         VALIDATORS.put(System.SCREEN_OFF_TIMEOUT, NON_NEGATIVE_INTEGER_VALIDATOR);
+         VALIDATORS.put(System.SCREEN_BRIGHTNESS_FOR_VR, new InclusiveIntegerRangeValidator(0, 255));
+         VALIDATORS.put(System.SCREEN_BRIGHTNESS_MODE, BOOLEAN_VALIDATOR);
++        VALIDATORS.put(System.SCREEN_RESOLUTION_MODE, NON_NEGATIVE_INTEGER_VALIDATOR);
+         VALIDATORS.put(System.ADAPTIVE_SLEEP, BOOLEAN_VALIDATOR);
+         VALIDATORS.put(System.MODE_RINGER_STREAMS_AFFECTED, NON_NEGATIVE_INTEGER_VALIDATOR);
+         VALIDATORS.put(System.MUTE_STREAMS_AFFECTED, NON_NEGATIVE_INTEGER_VALIDATOR);
+diff --git a/services/core/java/com/android/server/display/DisplayManagerService.java b/services/core/java/com/android/server/display/DisplayManagerService.java
+index 909c531c5e92..470652fd6f0a 100644
+--- a/services/core/java/com/android/server/display/DisplayManagerService.java
++++ b/services/core/java/com/android/server/display/DisplayManagerService.java
+@@ -421,6 +421,7 @@ public final class DisplayManagerService extends SystemService {
+ 
+     private SensorManager mSensorManager;
+     private BrightnessTracker mBrightnessTracker;
++    private ResolutionSettings mResolutionSettings;
+ 
+ 
+     // Whether minimal post processing is allowed by the user.
+@@ -656,6 +657,7 @@ public final class DisplayManagerService extends SystemService {
+         mHandler.sendEmptyMessage(MSG_REGISTER_ADDITIONAL_DISPLAY_ADAPTERS);
+ 
+         mSettingsObserver = new SettingsObserver();
++        mResolutionSettings = new ResolutionSettings(mContext, mHandler);
+ 
+         mBrightnessSynchronizer.startSynchronizing();
+ 
+diff --git a/services/core/java/com/android/server/display/ResolutionSettings.java b/services/core/java/com/android/server/display/ResolutionSettings.java
+new file mode 100644
+index 000000000000..2a61c5eb2697
+--- /dev/null
++++ b/services/core/java/com/android/server/display/ResolutionSettings.java
+@@ -0,0 +1,83 @@
++/*
++ * Copyright (C) 2021 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package com.android.server.display;
++
++import android.content.Context;
++import android.content.ContentResolver;
++import android.database.ContentObserver;
++import android.net.Uri;
++import android.os.Handler;
++import android.os.RemoteException;
++import android.os.UserHandle;
++import android.provider.Settings;
++import android.util.Slog;
++
++import android.view.Display;
++import android.view.IWindowManager;
++import android.view.WindowManagerGlobal;
++
++public class ResolutionSettings {
++    private static final String TAG = "ResolutionSettings";
++    
++    private Context mContext;
++    private final Handler mHandler;
++    private SettingsObserver mSettingsObserver;
++
++    public ResolutionSettings(Context context, Handler handler) {
++        this.mContext = context;
++        this.mHandler = handler;
++
++        mSettingsObserver = new SettingsObserver();
++    }
++
++    private void updateScreenResolution() {
++        int resolutionMode = Settings.System.getIntForUser(mContext.getContentResolver(),
++            Settings.System.SCREEN_RESOLUTION_MODE, 0, UserHandle.USER_CURRENT);
++        try {
++            if (resolutionMode == 0) {
++                // mondrian
++                final IWindowManager wms = WindowManagerGlobal.getWindowManagerService();
++                int displayId = Display.DEFAULT_DISPLAY;
++                wms.clearForcedDisplaySize(displayId);
++                wms.clearForcedDisplayDensityForUser(displayId, UserHandle.USER_CURRENT);
++            } else if (resolutionMode == 1) {
++                // mondrian
++                final IWindowManager wms = WindowManagerGlobal.getWindowManagerService();
++                int displayId = Display.DEFAULT_DISPLAY;
++                wms.setForcedDisplaySize(displayId, 1080, 2400);
++                wms.setForcedDisplayDensityForUser(displayId, 420, UserHandle.USER_CURRENT);
++            }
++        } catch (RemoteException e) {
++            Slog.e(TAG, "Remote execution", e);
++        }
++    }
++
++    private class SettingsObserver extends ContentObserver {
++        SettingsObserver() {
++            super(mHandler);
++
++            mContext.getContentResolver().registerContentObserver(
++                    Settings.System.getUriFor(
++                        Settings.System.SCREEN_RESOLUTION_MODE), false, this);
++        }
++
++        @Override
++        public void onChange(boolean selfChange, Uri uri) {
++            updateScreenResolution();
++        }
++    }
++}
+diff --git a/telecomm/java/android/telecom/Connection.java b/telecomm/java/android/telecom/Connection.java
+index 49ad58550db8..dec6def806c6 100644
+--- a/telecomm/java/android/telecom/Connection.java
++++ b/telecomm/java/android/telecom/Connection.java
+@@ -896,6 +896,17 @@ public abstract class Connection extends Conferenceable {
+      */
+     public static final String EVENT_CALL_MERGE_FAILED = "android.telecom.event.CALL_MERGE_FAILED";
+ 
++    /**
++     * Connection event used to inform Telecom when a resume operation on a call has failed.
++     * This event is only sent when concurrent calls (DSDA) are possible
++     * <p>
++     * Sent via {@link #sendConnectionEvent(String, Bundle)}.  The {@link Bundle} parameter is
++     * expected to be null when this connection event is used.
++     * @hide
++     */
++    public static final String EVENT_CALL_RESUME_FAILED =
++            "android.telecom.event.CALL_RESUME_FAILED";
++
+     /**
+      * Connection event used to inform Telecom when a hold operation on a call has failed.
+      * <p>
+diff --git a/telephony/java/android/telephony/TelephonyManager.java b/telephony/java/android/telephony/TelephonyManager.java
+index ecd8c7a3d917..6fa62413cdd6 100644
+--- a/telephony/java/android/telephony/TelephonyManager.java
++++ b/telephony/java/android/telephony/TelephonyManager.java
+@@ -561,6 +561,35 @@ public class TelephonyManager {
+         }
+     }
+ 
++    /**
++     * The allowed values for multi sim voice capability
++     *
++     * @hide
++     */
++    public interface MultiSimVoiceCapability {
++        /** default */
++        static final int UNKNOWN = 0;
++        /** Concurrent calls on both subscriptions are not possbile. */
++        static final int DSDS = 1;
++        /** Concurrent calls on both subscriptions are not possible but user will have option to
++         * accept MT call on one subscription when there is an ongoing call on another subscription.
++         */
++        static final int PSEUDO_DSDA = 2;
++        /** Concurrent calls on both subscriptions are possible */
++        static final int DSDA = 3;
++    }
++
++    /**
++     * Returns true if concurrent calls on both subscriptions are possible (ex: DSDA).
++     * Returns false for other cases.
++     */
++    /** {@hide} */
++    public static boolean isConcurrentCallsPossible() {
++        int mSimVoiceConfig = TelephonyProperties.multi_sim_voice_capability().orElse(
++                MultiSimVoiceCapability.UNKNOWN);
++        return mSimVoiceConfig == MultiSimVoiceCapability.DSDA;
++    }
++    
+     /**
+      * Returns the number of phones available.
+      * Returns 0 if none of voice, sms, data is not supported
+
