@@ -151,9 +151,6 @@ TARGET_BOARD_PLATFORM_GPU := qcom-adreno730
 QCOM_BOARD_PLATFORMS += sm8475
 BOARD_USES_QCOM_HARDWARE := true
 
-# Power
-TARGET_POWERHAL_MODE_EXT := $(DEVICE_PATH)/power/power-mode.cpp
-
 # Properties
 TARGET_PRODUCT_PROP += $(DEVICE_PATH)/configs/properties/product.prop
 TARGET_SYSTEM_PROP += $(DEVICE_PATH)/configs/properties/system.prop

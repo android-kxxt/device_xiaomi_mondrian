@@ -8,6 +8,7 @@
 
 #include <android-base/logging.h>
 #include <android-base/unique_fd.h>
+#include <android-base/properties.h>
 
 #include <poll.h>
 #include <sys/ioctl.h>
@@ -25,6 +26,9 @@
 #define PARAM_FOD_PRESSED 1
 #define PARAM_FOD_RELEASED 0
 
+#define COMMAND_FOD_PRESS_X 2
+#define COMMAND_FOD_PRESS_Y 3
+
 #define FOD_STATUS_OFF 0
 #define FOD_STATUS_ON 1
 
@@ -33,11 +37,6 @@
 #define TOUCH_MAGIC 'T'
 #define TOUCH_IOC_SET_CUR_VALUE _IO(TOUCH_MAGIC, SET_CUR_VALUE)
 #define TOUCH_IOC_GET_CUR_VALUE _IO(TOUCH_MAGIC, GET_CUR_VALUE)
-
-#define DISP_PARAM_PATH "sys/devices/virtual/mi_display/disp_feature/disp-DSI-0/disp_param"
-#define DISP_PARAM_LOCAL_HBM_MODE "9"
-#define DISP_PARAM_LOCAL_HBM_OFF "0"
-#define DISP_PARAM_LOCAL_HBM_ON "1"
 
 #define FOD_PRESS_STATUS_PATH "/sys/class/touch/touch_dev/fod_press_status"
 
@@ -64,6 +63,8 @@ struct disp_event_req
 };
 
 namespace {
+
+using ::android::base::GetProperty;
 
 template <typename T>
 static void set(const std::string& path, const T& value) {
@@ -96,9 +97,10 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
   public:
     void init(fingerprint_device_t* device) {
         mDevice = device;
+        halName = GetProperty("persist.vendor.sys.fp.vendor", "none");
         touch_fd_ = android::base::unique_fd(open(TOUCH_DEV_PATH, O_RDWR));
         disp_feature_fd_ = android::base::unique_fd(open(DISP_FEATURE_PATH, O_RDWR));
-        for(unsigned disp = 0; disp < 2; disp++) {
+        for (unsigned disp = 0; disp < 2; disp++) {
             struct disp_event_req req = {
                 .base = {
                     .flag = 0,
@@ -110,6 +112,7 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
             req.type = 5;
             ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &req);
         }
+
         std::thread([this]() {
             int fd = open(FOD_PRESS_STATUS_PATH, O_RDONLY);
             if (fd < 0) {
@@ -130,39 +133,63 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
                     continue;
                 }
 
-                mDevice->extCmd(mDevice, COMMAND_FOD_PRESS_STATUS,
-                                readBool(fd) ? PARAM_FOD_PRESSED : PARAM_FOD_RELEASED);
+                bool pressed = readBool(fd);
+                LOG(INFO) << __func__ << " extCmd: COMMAND_FOD_PRESS_STATUS " << pressed;
+
+                extCmd(COMMAND_FOD_PRESS_STATUS,
+                                pressed ? PARAM_FOD_PRESSED : PARAM_FOD_RELEASED);
             }
         }).detach();
     }
 
-    void onFingerDown(uint32_t /*x*/, uint32_t /*y*/, float /*minor*/, float /*major*/) {
+    void extCmd(int32_t cmd, int32_t param) {
+        mDevice->extCmd(mDevice, COMMAND_FOD_PRESS_X, fod_x);
+        mDevice->extCmd(mDevice, COMMAND_FOD_PRESS_Y, fod_y);
+        mDevice->extCmd(mDevice, cmd, param);
+    }
+
+    void onFingerDown(uint32_t x, uint32_t y, float /*minor*/, float /*major*/) {
+        // fod_x = x;
+        // fod_y = y;
         LOG(INFO) << __func__;
-        setFingerDown(true);
+        setFingerDown();
     }
 
     void onFingerUp() {
         LOG(INFO) << __func__;
-        setFingerDown(false);
+        setFingerUp();
     }
 
     void onAcquired(int32_t result, int32_t vendorCode) {
         LOG(INFO) << __func__ << " result: " << result << " vendorCode: " << vendorCode;
         if (result == FINGERPRINT_ACQUIRED_GOOD) {
-            setFingerDown(false);
+            setFingerUp();
             setFodStatus(FOD_STATUS_OFF);
-        } else if (vendorCode == 21 || vendorCode == 23) {
-            /*
-             * vendorCode = 21 waiting for fingerprint authentication
-             * vendorCode = 23 waiting for fingerprint enroll
-             */
-            setFodStatus(FOD_STATUS_ON);
+        } else {
+            if (halName == "fpc_fod") {
+                if (vendorCode == 20 || vendorCode == 22) {
+                    /*
+                    * vendorCode = 20 waiting for fingerprint authentication
+                    * vendorCode = 22 waiting for fingerprint enroll
+                    */
+                    setFodStatus(FOD_STATUS_ON);
+                }
+            }
+            else if (halName == "goodix_fod") {
+                if (vendorCode == 21 || vendorCode == 23) {
+                    /*
+                    * vendorCode = 21 waiting for fingerprint authentication
+                    * vendorCode = 23 waiting for fingerprint enroll
+                    */
+                    setFodStatus(FOD_STATUS_ON);
+                }        
+            }
         }
     }
 
     void cancel() {
         LOG(INFO) << __func__;
-        setFingerDown(false);
+        setFingerUp();
         setFodStatus(FOD_STATUS_OFF);
     }
 
@@ -170,24 +197,45 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
     fingerprint_device_t* mDevice;
     android::base::unique_fd touch_fd_;
     android::base::unique_fd disp_feature_fd_;
+    uint32_t fod_x = 0;
+    uint32_t fod_y = 0;
+    std::string halName;
 
     void setFodStatus(int value) {
+        // fpc:
         // Don't trigger /dev/xiaomi-touch here.
-        // int buf[MAX_BUF_SIZE] = {TOUCH_ID, Touch_Fod_Enable, value};
-        // ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
+        if (halName != "fpc_fod") {
+            int buf[MAX_BUF_SIZE] = {TOUCH_ID, TOUCH_FOD_ENABLE, value};
+            ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
+        }
     }
 
-    void setFingerDown(bool pressed) {
-        mDevice->extCmd(mDevice, COMMAND_NIT, pressed ? PARAM_NIT_FOD : PARAM_NIT_NONE);
+    void setFingerUp() {
+        extCmd(COMMAND_NIT, PARAM_NIT_NONE);
 
-        int buf[MAX_BUF_SIZE] = {TOUCH_ID, THP_FOD_DOWNUP_CTL, pressed ? 1 : 0};
+        int buf[MAX_BUF_SIZE] = {TOUCH_ID, THP_FOD_DOWNUP_CTL, 0};
         ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
         struct disp_event_req req = {
             .base = {
                 .flag = 1,
                 .disp_id = 0
             },
-            .type = static_cast<__u32>(pressed ? 2 : 1)
+            .type = 1
+        };
+        ioctl(disp_feature_fd_.get(), 1074545678, &req);
+    }
+
+    void setFingerDown() {   
+        extCmd(COMMAND_NIT, PARAM_NIT_FOD);
+
+        int buf[MAX_BUF_SIZE] = {TOUCH_ID, THP_FOD_DOWNUP_CTL, 1};
+        ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
+        struct disp_event_req req = {
+            .base = {
+                .flag = 1,
+                .disp_id = 0
+            },
+            .type = 2
         };
         ioctl(disp_feature_fd_.get(), 1074545678, &req);
     }

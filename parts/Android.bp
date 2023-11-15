@@ -22,7 +22,9 @@ android_app {
         "androidx.preference_preference",
         "org.pixelexperience.settings.resources",
     ],
-
+    jni_libs: [
+        "libtouch_jni",
+    ],
     optimize: {
         proguard_flags_files: ["proguard.flags"],
     },

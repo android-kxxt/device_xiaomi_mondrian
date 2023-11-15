@@ -1,6 +1,3 @@
-- 25/10/2023
-Repack vendor.img SHA256|bdeb1cad0eae06819e88f6522fa173a30751ba7e12a48f16012fe89b7a389219
-
 - 21/10/2023
 Repack vendor.img SHA256|dced1c05e58cedb30f054839d93efcb67005adeed73b091dd24b147e643bc526
 

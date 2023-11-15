@@ -27,20 +27,33 @@ import android.util.Log;
 import androidx.preference.PreferenceManager;
 
 import static android.provider.Settings.Secure.DOZE_ALWAYS_ON;
+import static android.provider.Settings.Secure.DOZE_DOUBLE_TAP_GESTURE;
 import static android.provider.Settings.Secure.DOZE_ENABLED;
 import static android.provider.Settings.Secure.DOZE_PRESS_UDFPS_MODE;
 
-public final class DozeUtils {
+class TouchControl {
+    static {
+        System.loadLibrary("touch_jni");
+    }
+    
+    public static native void setDoubleTapMode(int value);
+}
 
+public final class DozeUtils {
     private static final String TAG = "DozeUtils";
     private static final boolean DEBUG = false;
 
     private static final String DOZE_INTENT = "com.android.systemui.doze.pulse";
 
     protected static final String ALWAYS_ON_DISPLAY = "always_on_display";
+    protected static final String GESTURE_DOUBLE_TAP_KEY = "gesture_double_tap";
     protected static final String GESTURE_PRESS_UDFPS_KEY = "gesture_press_udfps_type";
 
     protected static final String DOZE_ENABLE = "doze_enable";
+
+    public static void initialize(Context context) {
+        updateDoubleTap(context);
+    }
 
     protected static boolean enableDoze(Context context, boolean enable) {
         return Settings.Secure.putInt(context.getContentResolver(),
@@ -55,6 +68,19 @@ public final class DozeUtils {
     protected static boolean enableAlwaysOn(Context context, boolean enable) {
         return Settings.Secure.putIntForUser(context.getContentResolver(),
                 DOZE_ALWAYS_ON, enable ? 1 : 0, UserHandle.USER_CURRENT);
+    }
+
+    protected static boolean enableDoubleTap(Context context, boolean enable) {
+        TouchControl.setDoubleTapMode(enable ? 1 : 0);
+        return Settings.Secure.putIntForUser(context.getContentResolver(),
+                DOZE_DOUBLE_TAP_GESTURE, enable ? 1 : 0, UserHandle.USER_CURRENT);
+    }
+
+    protected static void updateDoubleTap(Context context) {
+        int value = Settings.Secure.getInt(context.getContentResolver(),
+                DOZE_DOUBLE_TAP_GESTURE, 0);
+        Log.w(TAG, "updateDoubleTap " + value);
+        TouchControl.setDoubleTapMode(value);
     }
 
     protected static boolean setPressUdfpsMode(Context context, int mode) {

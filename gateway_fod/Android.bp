@@ -1,0 +1,21 @@
+//
+// Copyright (C) 2022 The LineageOS Project
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+cc_library {
+    name: "gateway_fod",
+    vendor: true,
+    relative_install_path: "hw",
+    srcs: ["fingerprint.cpp"],
+    shared_libs: [
+        "libbase",
+        "libcutils",
+        "libdl",
+        "liblog",
+        "libhidlbase",
+        "libhardware",
+        "libutils",
+    ],
+}

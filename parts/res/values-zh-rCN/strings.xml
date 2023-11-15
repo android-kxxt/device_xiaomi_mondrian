@@ -106,7 +106,11 @@
     <string name="screen_resolution_title">"屏幕分辨率"</string>
     <string name="choose_resolution_title">选择分辨率</string>
     <string name="screen_resolution_footer">"完整分辨率会增加耗电量。切换分辨率可能会导致一些应用重启。"</string>
-
+    
+    <!-- Double-tap gesture -->
+    <string name="double_tap_gesture_title">双击屏幕</string>
+    <string name="double_tap_gesture_summary">双击屏幕时唤醒设备</string>
+    
     <!-- Press-Udfps gesture -->
     <string name="press_udfps_gesture_title">按下指纹传感器</string>
     <string name="press_udfps_gesture_summary">按下指纹传感器时唤醒屏幕</string>

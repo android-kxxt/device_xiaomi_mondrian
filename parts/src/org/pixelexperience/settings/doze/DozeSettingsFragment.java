@@ -47,6 +47,7 @@ public class DozeSettingsFragment extends PreferenceFragment implements OnPrefer
     private MainSwitchPreference mSwitchBar;
 
     private SwitchPreference mAlwaysOnDisplayPreference;
+    private SwitchPreference mDoubleTapPreference;
     private ListPreference mPressUdfpsPreference;
 
     @Override
@@ -75,6 +76,10 @@ public class DozeSettingsFragment extends PreferenceFragment implements OnPrefer
         mAlwaysOnDisplayPreference.setChecked(DozeUtils.isAlwaysOnEnabled(getActivity()));
         mAlwaysOnDisplayPreference.setOnPreferenceChangeListener(this);
 
+        mDoubleTapPreference = (SwitchPreference) findPreference(DozeUtils.GESTURE_DOUBLE_TAP_KEY);
+        mDoubleTapPreference.setEnabled(dozeEnabled);
+        mDoubleTapPreference.setOnPreferenceChangeListener(this);
+
         mPressUdfpsPreference = (ListPreference) findPreference(DozeUtils.GESTURE_PRESS_UDFPS_KEY);
         mPressUdfpsPreference.setEnabled(dozeEnabled);
         mPressUdfpsPreference.setOnPreferenceChangeListener(this);
@@ -85,7 +90,12 @@ public class DozeSettingsFragment extends PreferenceFragment implements OnPrefer
         if (DozeUtils.ALWAYS_ON_DISPLAY.equals(preference.getKey())) {
             boolean value = Boolean.parseBoolean(newValue.toString());
             DozeUtils.enableAlwaysOn(getActivity(), value);
+            mDoubleTapPreference.setEnabled(!value);
             mPressUdfpsPreference.setEnabled(!value);
+        }
+        else if (DozeUtils.GESTURE_DOUBLE_TAP_KEY.equals(preference.getKey())) {
+            boolean value = Boolean.parseBoolean(newValue.toString());      
+            DozeUtils.enableDoubleTap(getActivity(), value);
         }
         else if (DozeUtils.GESTURE_PRESS_UDFPS_KEY.equals(preference.getKey())) {
             int value = Integer.parseInt(newValue.toString());      
@@ -106,6 +116,7 @@ public class DozeSettingsFragment extends PreferenceFragment implements OnPrefer
         }
 
         mAlwaysOnDisplayPreference.setEnabled(isChecked);
+        mDoubleTapPreference.setEnabled(isChecked);
         mPressUdfpsPreference.setEnabled(isChecked);
     }
 }

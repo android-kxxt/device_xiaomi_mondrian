@@ -22,8 +22,6 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/updatable_apex.mk)
 # Project ID Quota.
 $(call inherit-product, $(SRC_TARGET_DIR)/product/emulated_storage.mk)
 
-$(call inherit-product, hardware/qcom-caf/sm8450/audio/primary-hal/configs/audio_vendor_product.mk)
-
 DEVICE_PATH := device/xiaomi/mondrian
 
 # API

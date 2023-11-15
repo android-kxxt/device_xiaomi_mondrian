@@ -115,6 +115,10 @@
      <string name="refresh_high">90 Hz</string>
      <string name="refresh_extreme">120 Hz</string>
 
+     <!-- Double-tap gesture -->
+     <string name="double_tap_gesture_title">Double tap</string>
+     <string name="double_tap_gesture_summary">Double tap to wake the device</string>
+
      <!-- Press-Udfps gesture -->
      <string name="press_udfps_gesture_title">Press fingerprint sensor</string>
      <string name="press_udfps_gesture_summary">Pulse notifications on press fingerprint sensor</string>

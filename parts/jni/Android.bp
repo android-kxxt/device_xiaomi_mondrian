@@ -1,0 +1,20 @@
+//
+// Copyright (C) 2017-2020 The LineageOS Project
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+cc_library_shared {
+    name: "libtouch_jni",
+    sdk_version: "current",
+
+    srcs: ["TouchControl.cpp"],
+    cflags: [
+        "-Wall",
+        "-Werror",
+        "-Wunused",
+        "-Wunreachable-code",
+    ],
+    header_libs: ["jni_headers"],
+    system_ext_specific: true,
+}

@@ -15,8 +15,7 @@ To be submitted
 - https://github.com/LowTension/android_kernel_xiaomi_sm8475
 
 ## Required system patches
-
-### check [project_changes.diff](https://github.com/flakeforever/device_xiaomi_mondrian/blob/main/project_changes.diff)
+- Check [project_changes.diff](https://github.com/flakeforever/device_xiaomi_mondrian/blob/main/project_changes.diff)
 
 ## Prebuilt files (customized from V14.0.26.0):
 - https://drive.google.com/drive/folders/15Ihtjg5cZEeSgChfvwoYBC3Kv7HRyav4?usp=sharing
