@@ -98,11 +98,11 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
         mDevice = device;
         touch_fd_ = android::base::unique_fd(open(TOUCH_DEV_PATH, O_RDWR));
         disp_feature_fd_ = android::base::unique_fd(open(DISP_FEATURE_PATH, O_RDWR));
-        for(int disp = 0; disp < 2; disp++) {
+        for(unsigned disp = 0; disp < 2; disp++) {
             struct disp_event_req req = {
                 .base = {
                     .flag = 0,
-                    .disp_id = 0
+                    .disp_id = disp
                 },
                 .type = 2
             };
