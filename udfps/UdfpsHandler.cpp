@@ -44,6 +44,13 @@
 #define DISP_FEATURE_PATH "/dev/mi_display/disp_feature"
 #define MI_DISP_IOCTL_REGISTER_EVENT _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
 
+// flag, disp_id, type
+// _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
+// nr = 7, size = 13,
+// disp_event_req from techpack/display/include/uapi/display/drm/mi_disp.h
+//
+// /dev/mi_display/disp_feature
+
 struct disp_base
 {
     __u32 flag;
@@ -56,66 +63,54 @@ struct disp_event_req
     __u32 type;
 };
 
-// flag, disp_id, type
-// _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
-// nr = 7, size = 13,
-// disp_event_req from techpack/display/include/uapi/display/drm/mi_disp.h
-//
-// /dev/mi_display/disp_feature
+namespace {
 
-namespace
-{
+template <typename T>
+static void set(const std::string& path, const T& value) {
+    std::ofstream file(path);
+    file << value;
+}
 
-    template <typename T>
-    static void set(const std::string &path, const T &value)
-    {
-        std::ofstream file(path);
-        file << value;
+static bool readBool(int fd) {
+    char c;
+    int rc;
+
+    rc = lseek(fd, 0, SEEK_SET);
+    if (rc) {
+        LOG(ERROR) << "failed to seek fd, err: " << rc;
+        return false;
     }
 
-    static bool readBool(int fd)
-    {
-        char c;
-        int rc;
-
-        rc = lseek(fd, 0, SEEK_SET);
-        if (rc)
-        {
-            LOG(ERROR) << "failed to seek fd, err: " << rc;
-            return false;
-        }
-
-        rc = read(fd, &c, sizeof(char));
-        if (rc != 1)
-        {
-            LOG(ERROR) << "failed to read bool from fd, err: " << rc;
-            return false;
-        }
-
-        return c != '0';
+    rc = read(fd, &c, sizeof(char));
+    if (rc != 1) {
+        LOG(ERROR) << "failed to read bool from fd, err: " << rc;
+        return false;
     }
 
-} // anonymous namespace
+    return c != '0';
+}
 
-class XiaomiSm8450UdfpsHander : public UdfpsHandler
-{
-public:
-    void init(fingerprint_device_t *device)
-    {
+}  // anonymous namespace
+
+class XiaomiSm8450UdfpsHander : public UdfpsHandler {
+  public:
+    void init(fingerprint_device_t* device) {
         mDevice = device;
         touch_fd_ = android::base::unique_fd(open(TOUCH_DEV_PATH, O_RDWR));
         disp_feature_fd_ = android::base::unique_fd(open(DISP_FEATURE_PATH, O_RDWR));
-        int buf[4] = {0, 0, 2, 0};
-        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &buf);
-        buf[2] = 5;
-        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &buf);
-        buf[1] = 1;
-        buf[2] = 2;
-        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &buf);
-        buf[2] = 5;
-        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &buf);
-        std::thread([this]()
-                    {
+        for(int disp = 0; disp < 2; disp++) {
+            struct disp_event_req req = {
+                .base = {
+                    .flag = 0,
+                    .disp_id = 0
+                },
+                .type = 2
+            };
+            ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &req);
+            req.type = 5;
+            ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_REGISTER_EVENT, &req);
+        }
+        std::thread([this]() {
             int fd = open(FOD_PRESS_STATUS_PATH, O_RDONLY);
             if (fd < 0) {
                 LOG(ERROR) << "failed to open fd, err: " << fd;
@@ -137,32 +132,26 @@ public:
 
                 mDevice->extCmd(mDevice, COMMAND_FOD_PRESS_STATUS,
                                 readBool(fd) ? PARAM_FOD_PRESSED : PARAM_FOD_RELEASED);
-            } })
-            .detach();
+            }
+        }).detach();
     }
 
-    void onFingerDown(uint32_t /*x*/, uint32_t /*y*/, float /*minor*/, float /*major*/)
-    {
+    void onFingerDown(uint32_t /*x*/, uint32_t /*y*/, float /*minor*/, float /*major*/) {
         LOG(INFO) << __func__;
         setFingerDown(true);
     }
 
-    void onFingerUp()
-    {
+    void onFingerUp() {
         LOG(INFO) << __func__;
         setFingerDown(false);
     }
 
-    void onAcquired(int32_t result, int32_t vendorCode)
-    {
+    void onAcquired(int32_t result, int32_t vendorCode) {
         LOG(INFO) << __func__ << " result: " << result << " vendorCode: " << vendorCode;
-        if (result == FINGERPRINT_ACQUIRED_GOOD)
-        {
+        if (result == FINGERPRINT_ACQUIRED_GOOD) {
             setFingerDown(false);
             setFodStatus(FOD_STATUS_OFF);
-        }
-        else if (vendorCode == 21 || vendorCode == 23)
-        {
+        } else if (vendorCode == 21 || vendorCode == 23) {
             /*
              * vendorCode = 21 waiting for fingerprint authentication
              * vendorCode = 23 waiting for fingerprint enroll
@@ -171,49 +160,48 @@ public:
         }
     }
 
-    void cancel()
-    {
+    void cancel() {
         LOG(INFO) << __func__;
         setFingerDown(false);
         setFodStatus(FOD_STATUS_OFF);
     }
 
-private:
-    fingerprint_device_t *mDevice;
+  private:
+    fingerprint_device_t* mDevice;
     android::base::unique_fd touch_fd_;
     android::base::unique_fd disp_feature_fd_;
 
-    void setFodStatus(int value)
-    {
-        int buf[MAX_BUF_SIZE] = {TOUCH_ID, Touch_Fod_Enable, value};
+    void setFodStatus(int value) {
+        // Don't trigger /dev/xiaomi-touch here.
+        // int buf[MAX_BUF_SIZE] = {TOUCH_ID, Touch_Fod_Enable, value};
         // ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
     }
 
-    void setFingerDown(bool pressed)
-    {
+    void setFingerDown(bool pressed) {
         mDevice->extCmd(mDevice, COMMAND_NIT, pressed ? PARAM_NIT_FOD : PARAM_NIT_NONE);
 
         int buf[MAX_BUF_SIZE] = {TOUCH_ID, THP_FOD_DOWNUP_CTL, pressed ? 1 : 0};
         ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
-        int buf2[MAX_BUF_SIZE] = {1, 0, pressed ? 2 : 1};
-        ioctl(disp_feature_fd_.get(), 1074545678, &buf2);
-        // set(DISP_PARAM_PATH,
-        //     std::string(DISP_PARAM_LOCAL_HBM_MODE) + " " +
-        //             (pressed ? DISP_PARAM_LOCAL_HBM_ON : DISP_PARAM_LOCAL_HBM_OFF));
+        struct disp_event_req req = {
+            .base = {
+                .flag = 1,
+                .disp_id = 0
+            },
+            .type = static_cast<__u32>(pressed ? 2 : 1)
+        };
+        ioctl(disp_feature_fd_.get(), 1074545678, &req);
     }
 };
 
-static UdfpsHandler *create()
-{
+static UdfpsHandler* create() {
     return new XiaomiSm8450UdfpsHander();
 }
 
-static void destroy(UdfpsHandler *handler)
-{
+static void destroy(UdfpsHandler* handler) {
     delete handler;
 }
 
 extern "C" UdfpsHandlerFactory UDFPS_HANDLER_FACTORY = {
-    .create = create,
-    .destroy = destroy,
+        .create = create,
+        .destroy = destroy,
 };
