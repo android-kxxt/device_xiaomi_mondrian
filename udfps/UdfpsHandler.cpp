@@ -44,21 +44,14 @@
 #define MI_DISP_IOCTL_REGISTER_EVENT _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
 #define MI_DISP_IOCTL_SET_LOCAL_HBM  _IOC(_IOC_WRITE, 0x44, 0xE, 0xc)
 
-// flag, disp_id, type
-// _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
-// nr = 7, size = 13,
-// disp_event_req from techpack/display/include/uapi/display/drm/mi_disp.h
-//
-// /dev/mi_display/disp_feature
+// ioctl on /dev/mi_display/disp_feature and disp_event_req are from techpack/display/include/uapi/display/drm/mi_disp.h
 
-struct disp_base
-{
+struct disp_base {
     __u32 flag;
     __u32 disp_id;
 };
 
-struct disp_event_req
-{
+struct disp_event_req {
     struct disp_base base;
     __u32 type;
 };
@@ -139,6 +132,14 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
 
                 extCmd(COMMAND_FOD_PRESS_STATUS,
                                 pressed ? PARAM_FOD_PRESSED : PARAM_FOD_RELEASED);
+                struct disp_event_req req = {
+                    .base = {
+                        .flag = 1,
+                        .disp_id = 0
+                    },
+                    .type = static_cast<__u32>(pressed ? 2 : 1)
+                };
+                ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
             }
         }).detach();
     }
@@ -205,10 +206,10 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
     void setFodStatus(int value) {
         // fpc:
         // Don't trigger /dev/xiaomi-touch here.
-        if (halName != "fpc_fod") {
-            int buf[MAX_BUF_SIZE] = {TOUCH_ID, TOUCH_FOD_ENABLE, value};
-            ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
-        }
+        if (halName == "fpc_fod")
+            return;
+        int buf[MAX_BUF_SIZE] = {TOUCH_ID, TOUCH_FOD_ENABLE, value};
+        ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
     }
 
     void setFingerUp() {
@@ -216,14 +217,14 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
 
         int buf[MAX_BUF_SIZE] = {TOUCH_ID, THP_FOD_DOWNUP_CTL, 0};
         ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
-        struct disp_event_req req = {
-            .base = {
-                .flag = 1,
-                .disp_id = 0
-            },
-            .type = 1
-        };
-        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
+        // struct disp_event_req req = {
+        //     .base = {
+        //         .flag = 1,
+        //         .disp_id = 0
+        //     },
+        //     .type = 1
+        // };
+        // ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
     }
 
     void setFingerDown() {   
@@ -231,14 +232,14 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
 
         int buf[MAX_BUF_SIZE] = {TOUCH_ID, THP_FOD_DOWNUP_CTL, 1};
         ioctl(touch_fd_.get(), TOUCH_IOC_SET_CUR_VALUE, &buf);
-        struct disp_event_req req = {
-            .base = {
-                .flag = 1,
-                .disp_id = 0
-            },
-            .type = 2
-        };
-        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
+        // struct disp_event_req req = {
+        //     .base = {
+        //         .flag = 1,
+        //         .disp_id = 0
+        //     },
+        //     .type = 2
+        // };
+        // ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
     }
 };
 
