@@ -42,6 +42,7 @@
 
 #define DISP_FEATURE_PATH "/dev/mi_display/disp_feature"
 #define MI_DISP_IOCTL_REGISTER_EVENT _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
+#define MI_DISP_IOCTL_SET_LOCAL_HBM  _IOC(_IOC_WRITE, 0x44, 0xE, 0xc)
 
 // flag, disp_id, type
 // _IOC(_IOC_WRITE, 0x44, 0x7, 0xc)
@@ -222,7 +223,7 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
             },
             .type = 1
         };
-        ioctl(disp_feature_fd_.get(), 1074545678, &req);
+        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
     }
 
     void setFingerDown() {   
@@ -237,7 +238,7 @@ class XiaomiSm8450UdfpsHander : public UdfpsHandler {
             },
             .type = 2
         };
-        ioctl(disp_feature_fd_.get(), 1074545678, &req);
+        ioctl(disp_feature_fd_.get(), MI_DISP_IOCTL_SET_LOCAL_HBM, &req);
     }
 };
 
